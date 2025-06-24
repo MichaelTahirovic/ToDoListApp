@@ -383,7 +383,7 @@ class TodoApp:
         if task.get('comments'):
             comment_label = tk.Label(task_frame, text=f"Comments: {task['comments']}", 
                                    font=('Arial', 9), bg=bg_color, fg='#666666',
-                                   wraplength=400, justify='left')
+                                   wraplength=600, justify='left')  # Increased wraplength
             comment_label.pack(anchor='w', pady=(5, 0))
         
         # Buttons frame
@@ -487,13 +487,40 @@ class TodoApp:
         # Clear all button
         clear_btn = tk.Button(title_frame, text="Clear All", font=('Arial', 10),
                             command=self.clear_today_tasks, bg='#f44336', fg='white',
-                            bd=0, padx=15, pady=5)
+                            bd=0, padx=15, pady=5, cursor='hand2')
         clear_btn.pack(side='right')
+        
+        # Create scrollable container for tasks
+        tasks_container = tk.Frame(self.tasks_for_day_frame, bg='#f0f0f0')
+        tasks_container.pack(fill='both', expand=True)
+        
+        # Create canvas for scrollable tasks
+        canvas = tk.Canvas(tasks_container, bg='#f0f0f0', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(tasks_container, orient="vertical", command=canvas.yview)
+        scrollable_tasks_frame = tk.Frame(canvas, bg='#f0f0f0')
+        
+        scrollable_tasks_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_tasks_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Bind mouse wheel to canvas
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
         
         # Display today's tasks
         for task in self.today_tasks:
             category = self.categories.get(task['category_id'], {})
-            self.create_task_widget(self.tasks_for_day_frame, task, 
+            self.create_task_widget(scrollable_tasks_frame, task, 
                                   category.get('color', '#cccccc'))
     
     def clear_today_tasks(self):
@@ -751,20 +778,20 @@ class TodoApp:
         
         dialog = tk.Toplevel(self.root)
         dialog.title("Add New Task")
-        dialog.geometry("600x700")  # Increased size
+        dialog.geometry("800x900")  # Increased size significantly
         dialog.configure(bg='#f0f0f0')
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Make dialog modal
-        dialog.focus_set()
-        dialog.wait_window()
-        
-        # Center dialog
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (600 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (700 // 2)
-        dialog.geometry(f"600x700+{x}+{y}")
+        # Center dialog safely
+        try:
+            dialog.update_idletasks()
+            x = (dialog.winfo_screenwidth() // 2) - (800 // 2)
+            y = (dialog.winfo_screenheight() // 2) - (900 // 2)
+            dialog.geometry(f"800x900+{x}+{y}")
+        except:
+            # Fallback centering
+            dialog.geometry("800x900+100+100")
         
         # Main container with scrollbar
         main_container = tk.Frame(dialog, bg='#f0f0f0')
@@ -799,7 +826,7 @@ class TodoApp:
         
         # Task name
         tk.Label(form_frame, text="Task Name:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
-        name_entry = tk.Entry(form_frame, font=('Arial', 12), width=50)  # Increased width
+        name_entry = tk.Entry(form_frame, font=('Arial', 12), width=70)  # Increased width significantly
         name_entry.pack(fill='x', pady=(5, 15))
         
         # Category selection
@@ -821,18 +848,18 @@ class TodoApp:
         # Start date
         tk.Label(form_frame, text="Start Date:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         if DateEntry:
-            start_date_entry = DateEntry(form_frame, font=('Arial', 12), width=25)
+            start_date_entry = DateEntry(form_frame, font=('Arial', 12), width=35)
         else:
-            start_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=25)
+            start_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=35)
             start_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
         start_date_entry.pack(anchor='w', pady=(5, 15))
         
         # Due date
         tk.Label(form_frame, text="Due Date:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         if DateEntry:
-            due_date_entry = DateEntry(form_frame, font=('Arial', 12), width=25)
+            due_date_entry = DateEntry(form_frame, font=('Arial', 12), width=35)
         else:
-            due_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=25)
+            due_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=35)
             due_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
         due_date_entry.pack(anchor='w', pady=(5, 15))
         
@@ -840,7 +867,7 @@ class TodoApp:
         tk.Label(form_frame, text="Progress (%):", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         progress_var = tk.IntVar(value=0)
         progress_scale = tk.Scale(form_frame, from_=0, to=100, orient='horizontal',
-                                variable=progress_var, bg='#f0f0f0', length=400)
+                                variable=progress_var, bg='#f0f0f0', length=600)
         progress_scale.pack(fill='x', pady=(5, 15))
         
         # Status
@@ -853,7 +880,7 @@ class TodoApp:
         
         # Comments
         tk.Label(form_frame, text="Comments:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
-        comments_text = tk.Text(form_frame, height=6, font=('Arial', 12))  # Increased height
+        comments_text = tk.Text(form_frame, height=8, font=('Arial', 12))  # Increased height
         comments_text.pack(fill='x', pady=(5, 15))
         
         # Buttons
@@ -916,7 +943,7 @@ class TodoApp:
         """Edit an existing task"""
         dialog = tk.Toplevel(self.root)
         dialog.title("Edit Task")
-        dialog.geometry("700x800")  # Increased size significantly
+        dialog.geometry("900x900")  # Increased size significantly
         dialog.configure(bg='#f0f0f0')
         dialog.transient(self.root)
         dialog.grab_set()
@@ -924,12 +951,12 @@ class TodoApp:
         # Center dialog safely
         try:
             dialog.update_idletasks()
-            x = (dialog.winfo_screenwidth() // 2) - (700 // 2)
-            y = (dialog.winfo_screenheight() // 2) - (800 // 2)
-            dialog.geometry(f"700x800+{x}+{y}")
+            x = (dialog.winfo_screenwidth() // 2) - (900 // 2)
+            y = (dialog.winfo_screenheight() // 2) - (900 // 2)
+            dialog.geometry(f"900x900+{x}+{y}")
         except:
             # Fallback centering
-            dialog.geometry("700x800+100+100")
+            dialog.geometry("900x900+100+100")
         
         # Main container with scrollbar
         main_container = tk.Frame(dialog, bg='#f0f0f0')
@@ -964,7 +991,7 @@ class TodoApp:
         
         # Task name
         tk.Label(form_frame, text="Task Name:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
-        name_entry = tk.Entry(form_frame, font=('Arial', 12), width=60)  # Increased width
+        name_entry = tk.Entry(form_frame, font=('Arial', 12), width=80)  # Increased width significantly
         name_entry.insert(0, task['name'])
         name_entry.pack(fill='x', pady=(5, 15))
         
@@ -991,20 +1018,20 @@ class TodoApp:
         # Start date
         tk.Label(form_frame, text="Start Date:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         if DateEntry:
-            start_date_entry = DateEntry(form_frame, font=('Arial', 12), width=30)
+            start_date_entry = DateEntry(form_frame, font=('Arial', 12), width=40)
             start_date_entry.set_date(datetime.strptime(task['start_date'], '%Y-%m-%d'))
         else:
-            start_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=30)
+            start_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=40)
             start_date_entry.insert(0, task['start_date'])
         start_date_entry.pack(anchor='w', pady=(5, 15))
         
         # Due date
         tk.Label(form_frame, text="Due Date:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         if DateEntry:
-            due_date_entry = DateEntry(form_frame, font=('Arial', 12), width=30)
+            due_date_entry = DateEntry(form_frame, font=('Arial', 12), width=40)
             due_date_entry.set_date(datetime.strptime(task['due_date'], '%Y-%m-%d'))
         else:
-            due_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=30)
+            due_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=40)
             due_date_entry.insert(0, task['due_date'])
         due_date_entry.pack(anchor='w', pady=(5, 15))
         
@@ -1012,7 +1039,7 @@ class TodoApp:
         tk.Label(form_frame, text="Progress (%):", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         progress_var = tk.IntVar(value=task['progress'])
         progress_scale = tk.Scale(form_frame, from_=0, to=100, orient='horizontal',
-                                variable=progress_var, bg='#f0f0f0', length=500)
+                                variable=progress_var, bg='#f0f0f0', length=700)
         progress_scale.pack(fill='x', pady=(5, 15))
         
         # Status
@@ -1026,18 +1053,18 @@ class TodoApp:
         # Date completed
         tk.Label(form_frame, text="Date Completed (optional):", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         if DateEntry:
-            completed_date_entry = DateEntry(form_frame, font=('Arial', 12), width=30)
+            completed_date_entry = DateEntry(form_frame, font=('Arial', 12), width=40)
             if task.get('date_completed'):
                 completed_date_entry.set_date(datetime.strptime(task['date_completed'], '%Y-%m-%d'))
         else:
-            completed_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=30)
+            completed_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=40)
             if task.get('date_completed'):
                 completed_date_entry.insert(0, task['date_completed'])
         completed_date_entry.pack(anchor='w', pady=(5, 15))
         
         # Comments
         tk.Label(form_frame, text="Comments:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
-        comments_text = tk.Text(form_frame, height=8, font=('Arial', 12))  # Increased height
+        comments_text = tk.Text(form_frame, height=10, font=('Arial', 12))  # Increased height
         comments_text.insert('1.0', task.get('comments', ''))
         comments_text.pack(fill='x', pady=(5, 15))
         
@@ -1097,6 +1124,10 @@ class TodoApp:
     
     def switch_tab(self, tab_name):
         """Switch between tabs"""
+        # Store current category state before switching
+        if hasattr(self, 'current_category_id'):
+            self.remembered_category_id = self.current_category_id
+        
         self.current_tab.set(tab_name)
         self.show_tab(tab_name)
     
@@ -1111,7 +1142,11 @@ class TodoApp:
         
         # Update tab-specific content
         if tab_name == 'Main':
-            self.update_categories_display()
+            # Check if we should restore a remembered category
+            if hasattr(self, 'remembered_category_id'):
+                self.expand_category(self.remembered_category_id)
+            else:
+                self.update_categories_display()
         elif tab_name == 'Tasks for the Day':
             self.update_tasks_for_day()
         elif tab_name == 'Timeline':
@@ -1121,15 +1156,17 @@ class TodoApp:
         """Update all displays after data changes"""
         # Store current view state
         current_tab = self.current_tab.get()
+        current_category = getattr(self, 'current_category_id', None)
         
         # Update all displays
         self.update_categories_display()
         self.update_tasks_for_day()
         self.update_timeline()
         
-        # If we're in a category view, stay there
-        if hasattr(self, 'current_category_id'):
-            self.expand_category(self.current_category_id)
+        # If we were in a category view, restore it
+        if current_category:
+            self.current_category_id = current_category
+            self.expand_category(current_category)
         
         # Restore tab if needed
         if current_tab != self.current_tab.get():

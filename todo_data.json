@@ -2,7 +2,7 @@
   "categories": {
     "1": {
       "name": "Test Change name",
-      "color": "#ff8080"
+      "color": "#0080ff"
     },
     "2": {
       "name": "Test 2",
@@ -47,8 +47,8 @@
       "due_date": "2025-06-27",
       "progress": 21,
       "status": "In Progress",
-      "comments": "Another test",
-      "date_completed": null
+      "comments": "",
+      "date_completed": "2025-06-23"
     },
     {
       "id": "3",
@@ -60,6 +60,18 @@
       "progress": 15,
       "status": "In Progress",
       "comments": "Another task from a different category",
+      "date_completed": null
+    },
+    {
+      "id": "4",
+      "name": "Test task 4",
+      "category_id": "2",
+      "priority": "Medium",
+      "start_date": "2025-05-20",
+      "due_date": "2025-08-21",
+      "progress": 14,
+      "status": "Not Started",
+      "comments": "",
       "date_completed": null
     }
   ]
