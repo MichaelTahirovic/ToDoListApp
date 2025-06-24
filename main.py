@@ -1,10 +1,19 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, colorchooser
-from tkcalendar import DateEntry
+try:
+    from tkcalendar import DateEntry
+except ImportError:
+    # Fallback if tkcalendar is not available
+    DateEntry = None
 from datetime import datetime, timedelta
 import json
 import os
-from PIL import Image, ImageTk
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    # Fallback if PIL is not available
+    Image = None
+    ImageTk = None
 
 import math
 
@@ -12,7 +21,7 @@ class TodoApp:
     def __init__(self, root):
         self.root = root
         self.root.title("To-Do List Application")
-        self.root.geometry("1200x800")
+        self.root.geometry("1400x900")  # Increased window size
         self.root.configure(bg='#f0f0f0')
         
         # Data storage
@@ -70,13 +79,14 @@ class TodoApp:
         
         # Dark/Light mode button (left of logo)
         self.theme_btn = tk.Button(self.header, text="🌙", font=('Arial', 16), 
-                                 command=self.toggle_theme, bg='#ffffff', bd=0)
+                                 command=self.toggle_theme, bg='#ffffff', bd=0,
+                                 cursor='hand2')  # Add cursor pointer
         self.theme_btn.place(x=80, y=20)
         
         # Add New button (right)
         self.add_btn = tk.Button(self.header, text="+ Add New", font=('Arial', 12, 'bold'),
                                command=self.show_add_dialog, bg='#4CAF50', fg='white',
-                               bd=0, padx=20, pady=10, relief='flat')
+                               bd=0, padx=20, pady=10, relief='flat', cursor='hand2')
         self.add_btn.place(relx=1.0, x=-120, y=20)
         
         # Tab navigation (center)
@@ -89,7 +99,7 @@ class TodoApp:
         for tab in self.tabs:
             btn = tk.Button(self.tab_frame, text=tab, font=('Arial', 11),
                           command=lambda t=tab: self.switch_tab(t),
-                          bg='#ffffff', bd=0, padx=15, pady=8)
+                          bg='#ffffff', bd=0, padx=15, pady=8, cursor='hand2')
             btn.pack(side='left', padx=5)
     
     def create_main_content(self):
@@ -145,15 +155,37 @@ class TodoApp:
                              bg='#f0f0f0', fg='#333333')
         title_label.pack(pady=20)
         
-        # Timeline canvas
-        self.timeline_canvas = tk.Canvas(self.tab_content['Timeline'], bg='white', 
-                                       height=400, relief='solid', bd=1)
-        self.timeline_canvas.pack(fill='both', expand=True, padx=20, pady=10)
+        # Timeline container with fixed height
+        timeline_container = tk.Frame(self.tab_content['Timeline'], bg='#f0f0f0', height=500)
+        timeline_container.pack(fill='x', padx=20, pady=10)
+        timeline_container.pack_propagate(False)
+        
+        # Timeline canvas with scrollbars
+        self.timeline_canvas = tk.Canvas(timeline_container, bg='white', 
+                                       relief='solid', bd=1, height=400)
+        
+        # Horizontal scrollbar for timeline
+        h_scrollbar = ttk.Scrollbar(timeline_container, orient="horizontal", command=self.timeline_canvas.xview)
+        
+        # Vertical scrollbar for tasks
+        v_scrollbar = ttk.Scrollbar(timeline_container, orient="vertical", command=self.timeline_canvas.yview)
+        
+        # Configure canvas scrolling
+        self.timeline_canvas.configure(xscrollcommand=h_scrollbar.set, yscrollcommand=v_scrollbar.set)
+        
+        # Pack scrollbars and canvas
+        h_scrollbar.pack(side='bottom', fill='x')
+        v_scrollbar.pack(side='right', fill='y')
+        self.timeline_canvas.pack(side='left', fill='both', expand=True)
         
         self.update_timeline()
     
     def update_categories_display(self):
         """Update the categories grid display"""
+        # Clear current category tracking
+        if hasattr(self, 'current_category_id'):
+            delattr(self, 'current_category_id')
+        
         # Clear existing widgets
         for widget in self.categories_frame.winfo_children():
             widget.destroy()
@@ -206,6 +238,9 @@ class TodoApp:
     
     def expand_category(self, category_id):
         """Expand a category to show its tasks"""
+        # Store current category for navigation
+        self.current_category_id = category_id
+        
         # Clear existing widgets
         for widget in self.categories_frame.winfo_children():
             widget.destroy()
@@ -220,7 +255,7 @@ class TodoApp:
         # Back button
         back_btn = tk.Button(header_frame, text="← Back", font=('Arial', 10),
                            command=self.update_categories_display, bg=category['color'],
-                           fg='white', bd=0)
+                           fg='white', bd=0, cursor='hand2')
         back_btn.pack(side='left')
         
         # Category name
@@ -228,21 +263,50 @@ class TodoApp:
                             font=('Arial', 16, 'bold'), bg=category['color'], fg='white')
         name_label.pack(side='left', padx=20)
         
-        # Tasks container
-        tasks_frame = tk.Frame(self.categories_frame, bg=self.lighten_color(category['color']))
-        tasks_frame.pack(fill='both', expand=True)
+        # Edit category button (only shown when expanded)
+        edit_btn = tk.Button(header_frame, text="Edit Category", font=('Arial', 10),
+                           command=lambda: self.edit_category(category_id), bg=category['color'],
+                           fg='white', bd=1, relief='solid', padx=10, pady=2, cursor='hand2')
+        edit_btn.pack(side='right')
+        
+        # Tasks container with scrollbar
+        tasks_container = tk.Frame(self.categories_frame, bg=self.lighten_color(category['color']))
+        tasks_container.pack(fill='both', expand=True)
+        
+        # Create canvas for scrollable tasks
+        canvas = tk.Canvas(tasks_container, bg=self.lighten_color(category['color']), highlightthickness=0)
+        scrollbar = ttk.Scrollbar(tasks_container, orient="vertical", command=canvas.yview)
+        scrollable_tasks_frame = tk.Frame(canvas, bg=self.lighten_color(category['color']))
+        
+        scrollable_tasks_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_tasks_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Bind mouse wheel to canvas
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
         
         # Get tasks for this category
         category_tasks = [t for t in self.tasks if t['category_id'] == category_id]
         
         if not category_tasks:
-            empty_label = tk.Label(tasks_frame, text="No tasks in this category yet.",
+            empty_label = tk.Label(scrollable_tasks_frame, text="No tasks in this category yet.",
                                  font=('Arial', 12), bg=self.lighten_color(category['color']))
             empty_label.pack(pady=50)
         else:
             # Create task list
             for task in category_tasks:
-                self.create_task_widget(tasks_frame, task, category['color'])
+                self.create_task_widget(scrollable_tasks_frame, task, category['color'])
     
     def create_task_widget(self, parent, task, category_color):
         """Create a widget for displaying a task"""
@@ -267,12 +331,40 @@ class TodoApp:
                             bg=bg_color, fg='#333333')
         name_label.pack(side='left')
         
-        # Priority
-        priority_colors = {'High': '#ff4444', 'Medium': '#ffaa00', 'Low': '#44aa44'}
+        # Priority with updated colors
+        priority_colors = {'High': '#ff4444', 'Medium': '#ffaa00', 'Low': '#ffdd00'}  # Low is now yellow
         priority_label = tk.Label(header_frame, text=task['priority'], 
                                 font=('Arial', 10), bg=priority_colors.get(task['priority'], '#cccccc'),
-                                fg='white', padx=8, pady=2)
-        priority_label.pack(side='right')
+                                fg='white', padx=8, pady=2, relief='solid', bd=1)
+        priority_label.pack(side='right', padx=(5, 0))
+        
+        # Status box
+        status_box_colors = {
+            'Not Started': '#ff4444',
+            'In Progress': '#ffaa00', 
+            'Completed': '#44aa44',
+            'On Hold': '#8B4513'  # Brown
+        }
+        status_label = tk.Label(header_frame, text=task['status'], 
+                              font=('Arial', 10), bg=status_box_colors.get(task['status'], '#cccccc'),
+                              fg='white', padx=8, pady=2, relief='solid', bd=1)
+        status_label.pack(side='right', padx=(5, 0))
+        
+        # Progress box with color gradient
+        progress = task['progress']
+        if progress <= 25:
+            progress_color = '#ff4444'  # Red
+        elif progress <= 50:
+            progress_color = '#ff8800'  # Orange
+        elif progress <= 75:
+            progress_color = '#ffaa00'  # Yellow
+        else:
+            progress_color = '#44aa44'  # Green
+            
+        progress_label = tk.Label(header_frame, text=f"{progress}%", 
+                                font=('Arial', 10), bg=progress_color,
+                                fg='white', padx=8, pady=2, relief='solid', bd=1)
+        progress_label.pack(side='right', padx=(5, 0))
         
         # Task details
         details_frame = tk.Frame(task_frame, bg=bg_color)
@@ -287,12 +379,6 @@ class TodoApp:
                              bg=bg_color, fg='#666666')
         dates_label.pack(side='left')
         
-        # Progress
-        progress_text = f"Progress: {task['progress']}% | Status: {task['status']}"
-        progress_label = tk.Label(details_frame, text=progress_text, font=('Arial', 9),
-                                bg=bg_color, fg='#666666')
-        progress_label.pack(side='right')
-        
         # Comments
         if task.get('comments'):
             comment_label = tk.Label(task_frame, text=f"Comments: {task['comments']}", 
@@ -304,18 +390,59 @@ class TodoApp:
         buttons_frame = tk.Frame(task_frame, bg=bg_color)
         buttons_frame.pack(anchor='e', pady=(5, 0))
         
-        # Add to Today button
-        add_to_today_btn = tk.Button(buttons_frame, text="Add to Today", font=('Arial', 9),
-                                   command=lambda: self.add_to_today(task), bg='#2196F3',
-                                   fg='white', bd=0, padx=10, pady=2)
-        add_to_today_btn.pack(side='right', padx=(5, 0))
+        # Check if task is in today's list
+        is_in_today = hasattr(self, 'today_tasks') and any(t['id'] == task['id'] for t in self.today_tasks)
+        
+        # Add to Today / Remove from Today button
+        if is_in_today:
+            today_btn = tk.Button(buttons_frame, text="Doing Today", font=('Arial', 9),
+                                command=lambda: self.remove_from_today(task), bg='#87CEEB',  # Light blue
+                                fg='white', bd=0, padx=10, pady=2, cursor='hand2')
+        else:
+            today_btn = tk.Button(buttons_frame, text="Add to Today", font=('Arial', 9),
+                                command=lambda: self.add_to_today(task), bg='#2196F3',
+                                fg='white', bd=0, padx=10, pady=2, cursor='hand2')
+        today_btn.pack(side='right', padx=(5, 0))
+        
+        # Complete Task button (only show if not completed)
+        if task['status'] != 'Completed':
+            complete_btn = tk.Button(buttons_frame, text="Complete Task", font=('Arial', 9),
+                                   command=lambda: self.complete_task(task), bg='#4CAF50',
+                                   fg='white', bd=0, padx=10, pady=2, cursor='hand2')
+            complete_btn.pack(side='right', padx=(5, 0))
         
         # Edit button
         edit_btn = tk.Button(buttons_frame, text="Edit", font=('Arial', 9),
-                           command=lambda: self.edit_task(task), bg='#4CAF50',
-                           fg='white', bd=0, padx=10, pady=2)
+                           command=lambda: self.edit_task(task), bg='#FF9800',
+                           fg='white', bd=0, padx=10, pady=2, cursor='hand2')
         edit_btn.pack(side='right')
     
+    def complete_task(self, task):
+        """Complete a task by setting status to completed, progress to 100%, and adding completion date"""
+        task['status'] = 'Completed'
+        task['progress'] = 100
+        task['date_completed'] = datetime.now().strftime('%Y-%m-%d')
+        
+        # Update the task in today's list if it exists there
+        if hasattr(self, 'today_tasks'):
+            for today_task in self.today_tasks:
+                if today_task['id'] == task['id']:
+                    today_task['status'] = 'Completed'
+                    today_task['progress'] = 100
+                    today_task['date_completed'] = datetime.now().strftime('%Y-%m-%d')
+                    break
+        
+        self.save_data()
+        self.update_all_displays()
+        messagebox.showinfo("Success", f"Task '{task['name']}' marked as completed!")
+
+    def remove_from_today(self, task):
+        """Remove a task from the 'Tasks for the Day' list"""
+        if hasattr(self, 'today_tasks'):
+            self.today_tasks = [t for t in self.today_tasks if t['id'] != task['id']]
+            self.update_tasks_for_day()
+            messagebox.showinfo("Success", f"Task '{task['name']}' removed from today's list!")
+
     def add_to_today(self, task):
         """Add a task to the 'Tasks for the Day' list"""
         # Check if task is already in today's list
@@ -332,9 +459,8 @@ class TodoApp:
         self.today_tasks.append(task.copy())
         messagebox.showinfo("Success", f"Task '{task['name']}' added to today's list!")
         
-        # Update the display if we're on the Tasks for the Day tab
-        if self.current_tab.get() == 'Tasks for the Day':
-            self.update_tasks_for_day()
+        # Update all displays to reflect the change immediately
+        self.update_all_displays()
     
     def update_tasks_for_day(self):
         """Update the tasks for the day display"""
@@ -382,7 +508,7 @@ class TodoApp:
             messagebox.showinfo("Info", "No tasks to clear!")
     
     def update_timeline(self):
-        """Update the timeline/Gantt chart"""
+        """Update the timeline/Gantt chart with enhanced features"""
         self.timeline_canvas.delete('all')
         
         if not self.tasks:
@@ -391,12 +517,8 @@ class TodoApp:
             return
         
         # Calculate timeline dimensions
-        canvas_width = self.timeline_canvas.winfo_width()
-        canvas_height = self.timeline_canvas.winfo_height()
-        
-        if canvas_width <= 1:  # Canvas not yet drawn
-            canvas_width = 800
-            canvas_height = 400
+        canvas_width = max(800, len(self.tasks) * 200)  # Minimum width
+        canvas_height = 400
         
         # Find date range
         all_dates = []
@@ -410,46 +532,106 @@ class TodoApp:
             # Convert dates to datetime objects
             min_dt = datetime.strptime(min_date, '%Y-%m-%d')
             max_dt = datetime.strptime(max_date, '%Y-%m-%d')
-            total_days = (max_dt - min_dt).days + 1
+            
+            # Expand to full months
+            start_month = datetime(min_dt.year, min_dt.month, 1)
+            if max_dt.month == 12:
+                end_month = datetime(max_dt.year + 1, 1, 1)
+            else:
+                end_month = datetime(max_dt.year, max_dt.month + 1, 1)
+            
+            # Calculate total days
+            total_days = (end_month - start_month).days
+            
+            # Set canvas scroll region
+            self.timeline_canvas.configure(scrollregion=(0, 0, canvas_width, canvas_height))
             
             # Draw timeline
-            margin = 100
-            chart_width = canvas_width - 2 * margin
-            chart_height = canvas_height - 2 * margin
+            margin_left = 150  # Space for task names
+            margin_top = 50    # Space for date headers
+            chart_width = canvas_width - margin_left
+            chart_height = canvas_height - margin_top
             
-            # Draw axis
-            self.timeline_canvas.create_line(margin, canvas_height - margin, 
-                                          canvas_width - margin, canvas_height - margin,
-                                          fill='black', width=2)
+            # Draw horizontal axis (dates)
+            self.draw_date_axis(start_month, end_month, margin_left, margin_top, chart_width)
+            
+            # Draw vertical axis (task names)
+            self.draw_task_axis(margin_left, margin_top, chart_height)
             
             # Draw task bars
             y_spacing = chart_height / (len(self.tasks) + 1)
             for i, task in enumerate(self.tasks):
-                y = margin + (i + 1) * y_spacing
+                y = margin_top + (i + 1) * y_spacing
                 
                 # Calculate bar position
                 start_dt = datetime.strptime(task['start_date'], '%Y-%m-%d')
                 end_dt = datetime.strptime(task['due_date'], '%Y-%m-%d')
                 
-                start_x = margin + ((start_dt - min_dt).days / total_days) * chart_width
-                end_x = margin + ((end_dt - min_dt).days / total_days) * chart_width
+                start_x = margin_left + ((start_dt - start_month).days / total_days) * chart_width
+                end_x = margin_left + ((end_dt - start_month).days / total_days) * chart_width
                 
                 # Choose color based on status
                 status_colors = {
                     'Not Started': '#ff4444',
                     'In Progress': '#ffaa00',
                     'Completed': '#44aa44',
-                    'On Hold': '#888888'
+                    'On Hold': '#8B4513'
                 }
                 color = status_colors.get(task['status'], '#cccccc')
                 
                 # Draw task bar
                 self.timeline_canvas.create_rectangle(start_x, y - 10, end_x, y + 10,
-                                                   fill=color, outline='black')
+                                                   fill=color, outline='black', width=2)
                 
-                # Draw task name
-                self.timeline_canvas.create_text(margin - 5, y, text=task['name'],
+                # Add task name on the left (always visible)
+                self.timeline_canvas.create_text(margin_left - 5, y, text=task['name'],
                                               anchor='e', font=('Arial', 9))
+
+    def draw_date_axis(self, start_month, end_month, margin_left, margin_top, chart_width):
+        """Draw the date axis with months and days"""
+        current_month = start_month
+        x_offset = 0
+        
+        while current_month < end_month:
+            # Get days in current month
+            if current_month.month == 12:
+                next_month = datetime(current_month.year + 1, 1, 1)
+            else:
+                next_month = datetime(current_month.year, current_month.month + 1, 1)
+            
+            days_in_month = (next_month - current_month).days
+            month_width = (days_in_month / (end_month - start_month).days) * chart_width
+            
+            # Draw month header
+            month_name = current_month.strftime('%B %Y')
+            self.timeline_canvas.create_text(margin_left + x_offset + month_width/2, margin_top/2, 
+                                          text=month_name, font=('Arial', 10, 'bold'), anchor='center')
+            
+            # Draw day markers (every 5 days for readability)
+            for day in range(1, days_in_month + 1, 5):
+                day_date = datetime(current_month.year, current_month.month, day)
+                day_x = margin_left + x_offset + ((day_date - start_month).days / (end_month - start_month).days) * chart_width
+                
+                # Draw day marker
+                self.timeline_canvas.create_line(day_x, margin_top - 5, day_x, margin_top + 5, 
+                                              fill='black', width=1)
+                
+                # Draw day number
+                self.timeline_canvas.create_text(day_x, margin_top + 15, text=str(day), 
+                                              font=('Arial', 8), anchor='center')
+            
+            x_offset += month_width
+            current_month = next_month
+        
+        # Draw main axis line
+        self.timeline_canvas.create_line(margin_left, margin_top, margin_left + chart_width, margin_top,
+                                      fill='black', width=2)
+
+    def draw_task_axis(self, margin_left, margin_top, chart_height):
+        """Draw the task axis with task names"""
+        # Draw vertical axis line
+        self.timeline_canvas.create_line(margin_left, margin_top, margin_left, margin_top + chart_height,
+                                      fill='black', width=2)
     
     def show_add_dialog(self):
         """Show dialog to add new category or task"""
@@ -460,11 +642,15 @@ class TodoApp:
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Center dialog
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (300 // 2)
-        dialog.geometry(f"400x300+{x}+{y}")
+        # Center dialog safely
+        try:
+            dialog.update_idletasks()
+            x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
+            y = (dialog.winfo_screenheight() // 2) - (300 // 2)
+            dialog.geometry(f"400x300+{x}+{y}")
+        except:
+            # Fallback centering
+            dialog.geometry("400x300+100+100")
         
         # Title
         title_label = tk.Label(dialog, text="What would you like to add?", 
@@ -477,12 +663,12 @@ class TodoApp:
         
         category_btn = tk.Button(btn_frame, text="New Category", font=('Arial', 12),
                                command=lambda: [dialog.destroy(), self.add_category()],
-                               bg='#2196F3', fg='white', padx=30, pady=15, bd=0)
+                               bg='#2196F3', fg='white', padx=30, pady=15, bd=0, cursor='hand2')
         category_btn.pack(pady=10)
         
         task_btn = tk.Button(btn_frame, text="New Task", font=('Arial', 12),
                            command=lambda: [dialog.destroy(), self.add_task()],
-                           bg='#4CAF50', fg='white', padx=30, pady=15, bd=0)
+                           bg='#4CAF50', fg='white', padx=30, pady=15, bd=0, cursor='hand2')
         task_btn.pack(pady=10)
     
     def add_category(self):
@@ -565,20 +751,28 @@ class TodoApp:
         
         dialog = tk.Toplevel(self.root)
         dialog.title("Add New Task")
-        dialog.geometry("500x600")
+        dialog.geometry("600x700")  # Increased size
         dialog.configure(bg='#f0f0f0')
         dialog.transient(self.root)
         dialog.grab_set()
         
+        # Make dialog modal
+        dialog.focus_set()
+        dialog.wait_window()
+        
         # Center dialog
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (500 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (600 // 2)
-        dialog.geometry(f"500x600+{x}+{y}")
+        x = (dialog.winfo_screenwidth() // 2) - (600 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (700 // 2)
+        dialog.geometry(f"600x700+{x}+{y}")
         
-        # Scrollable frame
-        canvas = tk.Canvas(dialog, bg='#f0f0f0')
-        scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
+        # Main container with scrollbar
+        main_container = tk.Frame(dialog, bg='#f0f0f0')
+        main_container.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Create canvas and scrollbar
+        canvas = tk.Canvas(main_container, bg='#f0f0f0', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg='#f0f0f0')
         
         scrollable_frame.bind(
@@ -589,8 +783,15 @@ class TodoApp:
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
+        # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        
+        # Bind mouse wheel to canvas
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
         
         # Form
         form_frame = tk.Frame(scrollable_frame, bg='#f0f0f0')
@@ -598,7 +799,7 @@ class TodoApp:
         
         # Task name
         tk.Label(form_frame, text="Task Name:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
-        name_entry = tk.Entry(form_frame, font=('Arial', 12), width=40)
+        name_entry = tk.Entry(form_frame, font=('Arial', 12), width=50)  # Increased width
         name_entry.pack(fill='x', pady=(5, 15))
         
         # Category selection
@@ -620,18 +821,18 @@ class TodoApp:
         # Start date
         tk.Label(form_frame, text="Start Date:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         if DateEntry:
-            start_date_entry = DateEntry(form_frame, font=('Arial', 12), width=20)
+            start_date_entry = DateEntry(form_frame, font=('Arial', 12), width=25)
         else:
-            start_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=20)
+            start_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=25)
             start_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
         start_date_entry.pack(anchor='w', pady=(5, 15))
         
         # Due date
         tk.Label(form_frame, text="Due Date:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         if DateEntry:
-            due_date_entry = DateEntry(form_frame, font=('Arial', 12), width=20)
+            due_date_entry = DateEntry(form_frame, font=('Arial', 12), width=25)
         else:
-            due_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=20)
+            due_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=25)
             due_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
         due_date_entry.pack(anchor='w', pady=(5, 15))
         
@@ -639,7 +840,7 @@ class TodoApp:
         tk.Label(form_frame, text="Progress (%):", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         progress_var = tk.IntVar(value=0)
         progress_scale = tk.Scale(form_frame, from_=0, to=100, orient='horizontal',
-                                variable=progress_var, bg='#f0f0f0')
+                                variable=progress_var, bg='#f0f0f0', length=400)
         progress_scale.pack(fill='x', pady=(5, 15))
         
         # Status
@@ -652,7 +853,7 @@ class TodoApp:
         
         # Comments
         tk.Label(form_frame, text="Comments:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
-        comments_text = tk.Text(form_frame, height=4, font=('Arial', 12))
+        comments_text = tk.Text(form_frame, height=6, font=('Arial', 12))  # Increased height
         comments_text.pack(fill='x', pady=(5, 15))
         
         # Buttons
@@ -704,31 +905,39 @@ class TodoApp:
             messagebox.showinfo("Success", "Task added successfully!")
         
         save_btn = tk.Button(btn_frame, text="Save", command=save_task,
-                           bg='#4CAF50', fg='white', bd=0, padx=20, pady=8)
+                           bg='#4CAF50', fg='white', bd=0, padx=20, pady=8, cursor='hand2')
         save_btn.pack(side='right', padx=(10, 0))
         
         cancel_btn = tk.Button(btn_frame, text="Cancel", command=dialog.destroy,
-                             bg='#f44336', fg='white', bd=0, padx=20, pady=8)
+                             bg='#f44336', fg='white', bd=0, padx=20, pady=8, cursor='hand2')
         cancel_btn.pack(side='right')
     
     def edit_task(self, task):
         """Edit an existing task"""
         dialog = tk.Toplevel(self.root)
         dialog.title("Edit Task")
-        dialog.geometry("500x600")
+        dialog.geometry("700x800")  # Increased size significantly
         dialog.configure(bg='#f0f0f0')
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Center dialog
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (500 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (600 // 2)
-        dialog.geometry(f"500x600+{x}+{y}")
+        # Center dialog safely
+        try:
+            dialog.update_idletasks()
+            x = (dialog.winfo_screenwidth() // 2) - (700 // 2)
+            y = (dialog.winfo_screenheight() // 2) - (800 // 2)
+            dialog.geometry(f"700x800+{x}+{y}")
+        except:
+            # Fallback centering
+            dialog.geometry("700x800+100+100")
         
-        # Scrollable frame
-        canvas = tk.Canvas(dialog, bg='#f0f0f0')
-        scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
+        # Main container with scrollbar
+        main_container = tk.Frame(dialog, bg='#f0f0f0')
+        main_container.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Create canvas and scrollbar
+        canvas = tk.Canvas(main_container, bg='#f0f0f0', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg='#f0f0f0')
         
         scrollable_frame.bind(
@@ -739,8 +948,15 @@ class TodoApp:
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
+        # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        
+        # Bind mouse wheel to canvas
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
         
         # Form
         form_frame = tk.Frame(scrollable_frame, bg='#f0f0f0')
@@ -748,7 +964,7 @@ class TodoApp:
         
         # Task name
         tk.Label(form_frame, text="Task Name:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
-        name_entry = tk.Entry(form_frame, font=('Arial', 12), width=40)
+        name_entry = tk.Entry(form_frame, font=('Arial', 12), width=60)  # Increased width
         name_entry.insert(0, task['name'])
         name_entry.pack(fill='x', pady=(5, 15))
         
@@ -775,20 +991,20 @@ class TodoApp:
         # Start date
         tk.Label(form_frame, text="Start Date:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         if DateEntry:
-            start_date_entry = DateEntry(form_frame, font=('Arial', 12), width=20)
+            start_date_entry = DateEntry(form_frame, font=('Arial', 12), width=30)
             start_date_entry.set_date(datetime.strptime(task['start_date'], '%Y-%m-%d'))
         else:
-            start_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=20)
+            start_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=30)
             start_date_entry.insert(0, task['start_date'])
         start_date_entry.pack(anchor='w', pady=(5, 15))
         
         # Due date
         tk.Label(form_frame, text="Due Date:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         if DateEntry:
-            due_date_entry = DateEntry(form_frame, font=('Arial', 12), width=20)
+            due_date_entry = DateEntry(form_frame, font=('Arial', 12), width=30)
             due_date_entry.set_date(datetime.strptime(task['due_date'], '%Y-%m-%d'))
         else:
-            due_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=20)
+            due_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=30)
             due_date_entry.insert(0, task['due_date'])
         due_date_entry.pack(anchor='w', pady=(5, 15))
         
@@ -796,7 +1012,7 @@ class TodoApp:
         tk.Label(form_frame, text="Progress (%):", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         progress_var = tk.IntVar(value=task['progress'])
         progress_scale = tk.Scale(form_frame, from_=0, to=100, orient='horizontal',
-                                variable=progress_var, bg='#f0f0f0')
+                                variable=progress_var, bg='#f0f0f0', length=500)
         progress_scale.pack(fill='x', pady=(5, 15))
         
         # Status
@@ -810,18 +1026,18 @@ class TodoApp:
         # Date completed
         tk.Label(form_frame, text="Date Completed (optional):", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
         if DateEntry:
-            completed_date_entry = DateEntry(form_frame, font=('Arial', 12), width=20)
+            completed_date_entry = DateEntry(form_frame, font=('Arial', 12), width=30)
             if task.get('date_completed'):
                 completed_date_entry.set_date(datetime.strptime(task['date_completed'], '%Y-%m-%d'))
         else:
-            completed_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=20)
+            completed_date_entry = tk.Entry(form_frame, font=('Arial', 12), width=30)
             if task.get('date_completed'):
                 completed_date_entry.insert(0, task['date_completed'])
         completed_date_entry.pack(anchor='w', pady=(5, 15))
         
         # Comments
         tk.Label(form_frame, text="Comments:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
-        comments_text = tk.Text(form_frame, height=4, font=('Arial', 12))
+        comments_text = tk.Text(form_frame, height=8, font=('Arial', 12))  # Increased height
         comments_text.insert('1.0', task.get('comments', ''))
         comments_text.pack(fill='x', pady=(5, 15))
         
@@ -859,17 +1075,24 @@ class TodoApp:
             except:
                 task['date_completed'] = None
             
+            # Update task in today's list if it exists there
+            if hasattr(self, 'today_tasks'):
+                for today_task in self.today_tasks:
+                    if today_task['id'] == task['id']:
+                        today_task.update(task.copy())
+                        break
+            
             self.save_data()
             self.update_all_displays()
             dialog.destroy()
             messagebox.showinfo("Success", "Task updated successfully!")
         
         save_btn = tk.Button(btn_frame, text="Save Changes", command=save_changes,
-                           bg='#4CAF50', fg='white', bd=0, padx=20, pady=8)
+                           bg='#4CAF50', fg='white', bd=0, padx=20, pady=8, cursor='hand2')
         save_btn.pack(side='right', padx=(10, 0))
         
         cancel_btn = tk.Button(btn_frame, text="Cancel", command=dialog.destroy,
-                             bg='#f44336', fg='white', bd=0, padx=20, pady=8)
+                             bg='#f44336', fg='white', bd=0, padx=20, pady=8, cursor='hand2')
         cancel_btn.pack(side='right')
     
     def switch_tab(self, tab_name):
@@ -896,9 +1119,21 @@ class TodoApp:
     
     def update_all_displays(self):
         """Update all displays after data changes"""
+        # Store current view state
+        current_tab = self.current_tab.get()
+        
+        # Update all displays
         self.update_categories_display()
         self.update_tasks_for_day()
         self.update_timeline()
+        
+        # If we're in a category view, stay there
+        if hasattr(self, 'current_category_id'):
+            self.expand_category(self.current_category_id)
+        
+        # Restore tab if needed
+        if current_tab != self.current_tab.get():
+            self.switch_tab(current_tab)
     
     def toggle_theme(self):
         """Toggle between light and dark themes"""
@@ -943,6 +1178,84 @@ class TodoApp:
         
         # Convert back to hex
         return f'#{r:02x}{g:02x}{b:02x}'
+
+    def edit_category(self, category_id):
+        """Edit an existing category"""
+        category = self.categories[category_id]
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Edit Category")
+        dialog.geometry("400x250")
+        dialog.configure(bg='#f0f0f0')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Center dialog safely
+        try:
+            dialog.update_idletasks()
+            x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
+            y = (dialog.winfo_screenheight() // 2) - (250 // 2)
+            dialog.geometry(f"400x250+{x}+{y}")
+        except:
+            # Fallback centering
+            dialog.geometry("400x250+100+100")
+        
+        # Form
+        form_frame = tk.Frame(dialog, bg='#f0f0f0')
+        form_frame.pack(expand=True, padx=20, pady=20)
+        
+        # Category name
+        tk.Label(form_frame, text="Category Name:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
+        name_entry = tk.Entry(form_frame, font=('Arial', 12), width=30)
+        name_entry.insert(0, category['name'])
+        name_entry.pack(fill='x', pady=(5, 15))
+        
+        # Color selection
+        tk.Label(form_frame, text="Color:", font=('Arial', 12), bg='#f0f0f0').pack(anchor='w')
+        color_frame = tk.Frame(form_frame, bg='#f0f0f0')
+        color_frame.pack(fill='x', pady=(5, 15))
+        
+        selected_color = tk.StringVar(value=category['color'])
+        color_preview = tk.Frame(color_frame, bg=selected_color.get(), width=30, height=30)
+        color_preview.pack(side='left', padx=(0, 10))
+        
+        def choose_color():
+            color = colorchooser.askcolor(title="Choose Category Color")[1]
+            if color:
+                selected_color.set(color)
+                color_preview.configure(bg=color)
+        
+        color_btn = tk.Button(color_frame, text="Choose Color", command=choose_color,
+                            bg='#2196F3', fg='white', bd=0, padx=15, pady=5, cursor='hand2')
+        color_btn.pack(side='left')
+        
+        # Buttons
+        btn_frame = tk.Frame(form_frame, bg='#f0f0f0')
+        btn_frame.pack(fill='x', pady=(20, 0))
+        
+        def save_category():
+            name = name_entry.get().strip()
+            if not name:
+                messagebox.showerror("Error", "Please enter a category name")
+                return
+            
+            self.categories[category_id] = {
+                'name': name,
+                'color': selected_color.get()
+            }
+            
+            self.save_data()
+            self.update_categories_display()
+            dialog.destroy()
+            messagebox.showinfo("Success", "Category updated successfully!")
+        
+        save_btn = tk.Button(btn_frame, text="Save", command=save_category,
+                           bg='#4CAF50', fg='white', bd=0, padx=20, pady=8, cursor='hand2')
+        save_btn.pack(side='right', padx=(10, 0))
+        
+        cancel_btn = tk.Button(btn_frame, text="Cancel", command=dialog.destroy,
+                             bg='#f44336', fg='white', bd=0, padx=20, pady=8, cursor='hand2')
+        cancel_btn.pack(side='right')
 
 def main():
     root = tk.Tk()

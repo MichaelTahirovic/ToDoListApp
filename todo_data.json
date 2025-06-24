@@ -1,0 +1,66 @@
+{
+  "categories": {
+    "1": {
+      "name": "Test Change name",
+      "color": "#ff8080"
+    },
+    "2": {
+      "name": "Test 2",
+      "color": "#4CAF50"
+    },
+    "3": {
+      "name": "Test 3",
+      "color": "#0000a0"
+    },
+    "4": {
+      "name": "Test 4",
+      "color": "#ff8040"
+    },
+    "5": {
+      "name": "Test 5",
+      "color": "#8080ff"
+    },
+    "6": {
+      "name": "Test 6",
+      "color": "#ff80ff"
+    }
+  },
+  "tasks": [
+    {
+      "id": "1",
+      "name": "Test task name change",
+      "category_id": "1",
+      "priority": "Medium",
+      "start_date": "2025-06-23",
+      "due_date": "2025-06-25",
+      "progress": 46,
+      "status": "Not Started",
+      "comments": "This is a test task.",
+      "date_completed": "2025-06-23"
+    },
+    {
+      "id": "2",
+      "name": "Test task 2",
+      "category_id": "1",
+      "priority": "High",
+      "start_date": "2025-06-23",
+      "due_date": "2025-06-27",
+      "progress": 21,
+      "status": "In Progress",
+      "comments": "Another test",
+      "date_completed": null
+    },
+    {
+      "id": "3",
+      "name": "Test task 3",
+      "category_id": "3",
+      "priority": "Medium",
+      "start_date": "2025-06-23",
+      "due_date": "2025-06-23",
+      "progress": 15,
+      "status": "In Progress",
+      "comments": "Another task from a different category",
+      "date_completed": null
+    }
+  ]
+}
